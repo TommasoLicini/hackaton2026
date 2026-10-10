@@ -4,8 +4,8 @@ ports:
 - 8080
 bricks:
 - arduino:web_ui: {}
-- arduino:video_object_detection:
-    model: mio-modello-pannelli
+- arduino:video_image_classification:
+    model: ei-model-1135659-1
     devices:
     - remote_camera_0
 icon: 🥦

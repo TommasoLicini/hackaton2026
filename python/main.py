@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from arduino.app_utils import App, Bridge
 from arduino.app_bricks.web_ui import WebUI
-from arduino.app_bricks.video_objectdetection import VideoObjectDetection
+from arduino.app_bricks.video_imageclassification import VideoImageClassification
 from arduino.app_peripherals.camera import WebSocketCamera
 import time
 from fastapi.responses import HTMLResponse
@@ -36,24 +36,22 @@ camera = WebSocketCamera(secret=secret, encrypt=True, resolution=resolution)
 # pairing QR and the live stream.
 camera.on_status_changed(lambda evt_type, data: ui.send_message(evt_type, data))
 
-detect = VideoObjectDetection(camera, confidence=0.3, debounce_sec=0.0)
+detect = VideoImageClassification(camera, confidence=0.3, debounce_sec=0.0)
 
 
-# on_detect_all passes a dict keyed by detected class name, each value a list of
-# detections (confidence, bounding_box_xyxy, ...). Log it AND push to the UI.
-def handle_detections(detections: dict):
+# VideoImageClassification.on_detect_all passes a FLAT dict mapping each class
+# label to its confidence float: {"label": 0.87, ...}. (No nested dicts, no
+# bounding boxes - that was the object-detection shape.) Push each to the UI.
+def handle_detections(detections):
     print("DETECTIONS:", detections, flush=True)
-    for name, values in detections.items():
-        for value in values:
-            ui.send_message("detection", {
-                "content": name,
-                "confidence": value.get("confidence"),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-
+    for label, confidence in detections.items():
+        ui.send_message("detection", {
+            "content": label,
+            "confidence": confidence,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
 
 detect.on_detect_all(handle_detections)
-
 # Expose the processed camera feed (with detection overlays) as an MJPEG stream
 # the browser can render directly in an <img>. Served on the Web UI origin at
 # /camera, separate from the phone pairing WebSocket.
