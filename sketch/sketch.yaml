@@ -3,5 +3,8 @@ profiles:
     fqbn: 
     platforms:
       - platform: arduino:zephyr
+    libraries:
+      - Arduino_RouterBridge
+      - Servo
 
 default_profile: default
