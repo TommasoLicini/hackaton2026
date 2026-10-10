@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Controllo Servo - Arduino UNO Q</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Arduino WebUI client library (local). socket.io MUST load first,
+         then arduino.js which defines the WebUI class on top of it. -->
+    <script src="libs/socket.io.min.js"></script>
+    <script src="libs/arduino.js"></script>
+</head>
+<body>
+    <main class="card">
+        <h1>Controllo Servo</h1>
+        <p id="statusText" class="status status--off">Connessione in corso...</p>
+
+        <!-- Visualizzazione angolo -->
+        <div class="gauge">
+            <div id="gaugeNeedle" class="gauge__needle"></div>
+        </div>
+        <div id="angleValue" class="angle-value">90&deg;</div>
+
+        <!-- Slider -->
+        <label for="angleSlider" class="slider-label">Angolo (0&deg; - 180&deg;)</label>
+        <input id="angleSlider" class="slider" type="range" min="0" max="180" step="1" value="90" disabled>
+        <!-- Preset -->
+        <div class="presets">
+            <button class="preset" data-angle="0" disabled>0&deg;</button>
+            <button class="preset" data-angle="45" disabled>45&deg;</button>
+            <button class="preset" data-angle="90" disabled>90&deg;</button>
+            <button class="preset" data-angle="135" disabled>135&deg;</button>
+            <button class="preset" data-angle="180" disabled>180&deg;</button>
+        </div>
+
+        <p style="margin-top:24px;">
+            <a href="index.html" style="display:inline-block;padding:10px 18px;background:#2a2a2a;color:#fff;text-decoration:none;border:1px solid #3a3a3a;border-radius:10px;font-size:0.95rem;">
+                &larr; Camera Stream
+            </a>
+        </p>
+    </main>
+
+    <script src="app.js"></script>
+    </body>
+</html>

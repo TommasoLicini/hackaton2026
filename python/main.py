@@ -1,53 +1,122 @@
+import secrets
+import string
+from datetime import datetime, timezone
+
+from arduino.app_utils import App, Bridge
+from arduino.app_bricks.web_ui import WebUI
+from arduino.app_bricks.video_objectdetection import VideoObjectDetection
+from arduino.app_peripherals.camera import WebSocketCamera
 import time
+from fastapi.responses import HTMLResponse
 
-from arduino.app_utils import App, Bridge, WebUI
-
-# Angolo corrente conosciuto lato Linux (viene sincronizzato con l'MCU).
-current_angle = 90
-
-# Istanza della Web UI (brick arduino:web_ui).
+# ---------------------------------------------------------------------------
+# Shared Web UI. Both pages (index.html = camera, servo.html = servo control)
+# connect to this same backend over the same WebUI socket.
+# ---------------------------------------------------------------------------
 ui = WebUI()
 
 
+# ---------------------------------------------------------------------------
+# Camera / object detection
+# ---------------------------------------------------------------------------
+
+# The Arduino IoT Remote companion app authenticates the camera stream with a
+# 6-digit NUMERIC secret.
+def generate_secret() -> str:
+    return ''.join(secrets.choice(string.digits) for _ in range(6))
+
+
+secret = generate_secret()
+
+resolution = (480, 640)  # Portrait resolution for mobile devices
+camera = WebSocketCamera(secret=secret, encrypt=True, resolution=resolution)
+
+# The brick emits status events ('connected', 'disconnected', 'streaming',
+# 'paused'). Relay each one straight to the frontend so it can swap between the
+# pairing QR and the live stream.
+camera.on_status_changed(lambda evt_type, data: ui.send_message(evt_type, data))
+
+detect = VideoObjectDetection(camera, confidence=0.3, debounce_sec=0.0)
+
+
+# on_detect_all passes a dict keyed by detected class name, each value a list of
+# detections (confidence, bounding_box_xyxy, ...). Log it AND push to the UI.
+def handle_detections(detections: dict):
+    print("DETECTIONS:", detections, flush=True)
+    for name, values in detections.items():
+        for value in values:
+            ui.send_message("detection", {
+                "content": name,
+                "confidence": value.get("confidence"),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+
+
+detect.on_detect_all(handle_detections)
+
+# Expose the processed camera feed (with detection overlays) as an MJPEG stream
+# the browser can render directly in an <img>. Served on the Web UI origin at
+# /camera, separate from the phone pairing WebSocket.
+ui.expose_camera('/camera', camera, jpeg_quality=50)
+
+# Adjust the detection confidence threshold from the UI.
+ui.on_message("override_th", lambda sid, threshold: detect.override_threshold(threshold))
+
+
+# ---------------------------------------------------------------------------
+# Servo control (servo.html). The MCU exposes a 'set_servo' RPC via the Bridge
+# which applies the angle and returns the actually-applied value.
+# ---------------------------------------------------------------------------
+current_angle = 90  # last known angle, synced with the MCU
+
+
 def apply_angle(angle):
-    """Invia l'angolo all'MCU via Bridge e restituisce il valore applicato."""
+    """Send the angle to the MCU via Bridge; return the applied value."""
     global current_angle
     try:
         angle = int(angle)
     except (TypeError, ValueError):
         return current_angle
 
-    # L'MCU applica il clamp e restituisce l'angolo effettivo.
     result = Bridge.call("set_servo", angle)
     try:
         current_angle = int(result)
     except (TypeError, ValueError):
-        # Se il Bridge non restituisce un intero, teniamo il valore richiesto.
         current_angle = angle
     return current_angle
 
 
-def on_set_angle(message):
-    """Ricevuto dal browser quando l'utente muove lo slider/preset."""
+def on_set_angle(sid, message):
+    """Received from the browser when the user moves the slider/preset."""
     angle = message.get("angle") if isinstance(message, dict) else message
     applied = apply_angle(angle)
-    # Rimanda lo stato aggiornato a tutti i client collegati.
     ui.send_message("servo_state", {"angle": applied})
 
 
-def on_ui_connected():
-    """Alla connessione del browser invia lo stato attuale del servo."""
-    ui.send_message("servo_state", {"angle": current_angle})
-
-
-# Registra gli handler dei messaggi WebSocket provenienti dalla Web UI.
-ui.on_connect(on_ui_connected)
 ui.on_message("set_angle", on_set_angle)
 
 
-def loop():
-    """Chiamato ripetutamente dal framework App."""
-    time.sleep(1)
+# ---------------------------------------------------------------------------
+# On UI connect: send both the camera pairing payload and the servo state so
+# whichever page is open gets what it needs. Each page ignores messages it
+# doesn't listen for.
+# ---------------------------------------------------------------------------
+def handle_connect(sid):
+    ui.send_message("welcome", {
+        "client_name": camera.name,
+        "secret": secret,
+        "status": camera.status,
+        "protocol": camera.protocol,
+        "ip": camera.ip,
+        "port": camera.port,
+    })
+    ui.send_message("servo_state", {"angle": current_angle})
 
 
-App.run(user_loop=loop)
+ui.on_connect(handle_connect)
+
+# NOTE: do NOT define a custom "/" route. The WebUI brick serves assets/ static
+# files automatically (index.html at /, servo.html at /servo.html) and
+# bootstraps the socket session itself.
+
+App.run()

@@ -1,10 +1,11 @@
 name: hackathon
 description: readme
-ports: []
+ports:
+- 8080
 bricks:
 - arduino:web_ui: {}
 - arduino:video_object_detection:
-    model: yolox-object-detection
+    model: mio-modello-pannelli
     devices:
     - remote_camera_0
 icon: 🥦
