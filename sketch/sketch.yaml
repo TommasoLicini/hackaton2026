@@ -1,6 +1,7 @@
 profiles:
   default:
+    fqbn: 
     platforms:
       - platform: arduino:zephyr
-    libraries:
+
 default_profile: default

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arduino Phone Camera Stream</title>
+    <!-- Arduino WebUI client library -->
+    <script src="/_webui/webui.js"></script>
+    <!-- QRCode library for generating pairing code -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding-top: 50px; background: #121212; color: #fff; }
+        #qrCodeContainer { margin: 20px auto; background: white; padding: 10px; width: 128px; height: 128px; border-radius: 8px; }
+        .hidden { display: none; }
+        iframe { border: none; border-radius: 8px; }
+    </style>
+</head>
+<body>
+
+    <h1>Arduino Phone Camera Stream</h1>
+    <p id="statusText">Waiting for connection...</p>
+
+    <!-- QR Code / Secret Section (Shown when disconnected) -->
+    <div id="pairingSection">
+        <div id="qrCodeContainer"></div>
+        <p id="qrSecretText" style="font-family: monospace; font-size: 1.2em; color: #16A588;"></p>
+        <p style="font-size: 0.9em; color: #aaa;">Scan the QR code or enter the secret in the Arduino companion app.</p>
+    </div>
+
+    <!-- Live Stream Video Frame (Shown when streaming) -->
+    <div id="streamSection" class="hidden">
+        <iframe id="dynamicIframe" width="640" height="480"></iframe>
+    </div>
+
+    <script>
+        const ui = new WebUI();
+        let webcamState = { status: 'disconnected', secret: null, ip: '', port: '' };
+
+        const currentHostname = window.location.hostname;
+        const targetPort = 4912;
+        const streamUrl = `http://${currentHostname}:${targetPort}/camera`;
+
+        // Listen for welcome payload from Python backend
+        ui.on_message('welcome', (message) => {
+            webcamState.status = message.status;
+            webcamState.secret = message.secret;
+            webcamState.ip = message.ip;
+            webcamState.port = message.port;
+            updateDisplay();
+        });
+
+        ui.on_message('streaming', () => {
+            webcamState.status = 'streaming';
+            updateDisplay();
+        });
+
+        ui.on_message('disconnected', () => {
+            webcamState.status = 'disconnected';
+            updateDisplay();
+        });
+
+        function updateDisplay() {
+            const pairingSection = document.getElementById('pairingSection');
+            const streamSection = document.getElementById('streamSection');
+            const statusText = document.getElementById('statusText');
+
+            if (webcamState.status === 'streaming') {
+                pairingSection.classList.add('hidden');
+                streamSection.classList.remove('hidden');
+                statusText.textContent = "Camera Connected & Streaming!";
+                document.getElementById('dynamicIframe').src = streamUrl;
+            } else {
+                pairingSection.classList.remove('hidden');
+                streamSection.classList.add('hidden');
+                statusText.textContent = "Pair your phone using the code below:";
+                
+                if (webcamState.secret) {
+                    generateQRCode(webcamState.secret, 'ws', webcamState.ip, webcamState.port);
+                }
+            }
+        }
+
+        function generateQRCode(secret, protocol, ip, port) {
+            const container = document.getElementById('qrCodeContainer');
+            container.innerHTML = '';
+            new QRCode(container, {
+                text: `https://cloud.arduino.cc/installmobileapp?otp=${secret}&protocol=${protocol}&ip=${ip}&port=${port}`,
+                width: 128,
+                height: 128
+            });
+            document.getElementById('qrSecretText').textContent = `Secret: ${secret}`;
+        }
+    </script>
+</body>
+</html>
