@@ -26,6 +26,9 @@
         <a href="servo.html" style="display:inline-block;padding:10px 18px;background:#16A588;color:#fff;text-decoration:none;border-radius:10px;font-size:0.95rem;">
             Servo Control &rarr;
         </a>
+        <a href="graph.html" style="display:inline-block;padding:10px 18px;margin-left:8px;background:#16A588;color:#fff;text-decoration:none;border-radius:10px;font-size:0.95rem;">
+            Live Trend &rarr;
+        </a>
     </p>
 
     <!-- QR Code / Secret Section (Shown when disconnected) -->
@@ -37,13 +40,21 @@
 
     <!-- Live Stream Video Frame (Shown when streaming) -->
     <div id="streamSection" class="hidden">
-        <img id="cameraFeed" width="640" height="480" alt="Live camera feed">
+        <img id="cameraFeed" width="640" height="480" alt="Live camera feed" style="transition: transform 0.2s ease;">
+        <div style="margin-top:12px;">
+            <button id="rotateBtn" type="button"
+                style="padding:10px 18px;background:#2a2a2a;color:#fff;border:1px solid #3a3a3a;border-radius:10px;font-size:0.95rem;cursor:pointer;">
+                Rotate 90&deg; &#x21bb;
+            </button>
+        </div>
     </div>
 
-    <!-- Recent detections -->
+    <!-- Most recent detection -->
     <div id="detectionsSection">
-        <h3 style="color:#16A588;">Detections</h3>
-        <ul id="detectionsList" style="list-style:none;padding:0;max-width:480px;margin:0 auto;text-align:left;"></ul>
+        <h3 style="color:#16A588;">Latest Detection</h3>
+        <div id="latestDetection" style="max-width:480px;margin:0 auto;padding:10px 14px;background:#1e1e1e;border-radius:8px;font-size:1.1em;color:#aaa;">
+            Waiting for detections...
+        </div>
     </div>
 
     <script>
@@ -53,6 +64,23 @@
         // The processed camera feed (with detection overlays) is served as an
         // MJPEG stream at /camera on the same origin that serves this page.
         const streamUrl = `${window.location.origin}/camera`;
+
+        // Rotate the displayed stream in 90-degree steps. This is a view-only
+        // CSS transform: the AI model and detection overlays still run on the
+        // original (unrotated) frames on the backend.
+        let rotation = 0; // degrees, cycles 0 -> 90 -> 180 -> 270 -> 0
+        function applyRotation() {
+            const img = document.getElementById('cameraFeed');
+            img.style.transform = `rotate(${rotation}deg)`;
+            // When sideways (90/270), the rotated image is taller than wide, so
+            // reserve matching vertical space to avoid clipping the neighbours.
+            const stream = document.getElementById('streamSection');
+            stream.style.height = (rotation % 180 === 0) ? '' : (img.width + 'px');
+        }
+        document.getElementById('rotateBtn').addEventListener('click', () => {
+            rotation = (rotation + 90) % 360;
+            applyRotation();
+        });
 
         // Start / stop the <img> MJPEG stream. Clearing src closes the HTTP
         // connection so the board isn't streaming to a hidden element.
@@ -102,17 +130,13 @@
             updateDisplay();
         });
 
-        // Detections pushed from the backend's on_detect_all callback
-        const MAX_DETECTIONS = 10;
+        // Detections pushed from the backend's on_detect_all callback.
+        // Show only the most recent detection with its probability.
         ui.on_message('detection', (d) => {
-            const list = document.getElementById('detectionsList');
-            const li = document.createElement('li');
-            li.style.cssText = 'padding:6px 10px;margin:4px 0;background:#1e1e1e;border-radius:6px;';
+            const el = document.getElementById('latestDetection');
             const pct = d.confidence != null ? ` (${(d.confidence * 100).toFixed(1)}%)` : '';
-            const time = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '';
-            li.textContent = `${d.content}${pct}  ${time}`;
-            list.prepend(li);
-            while (list.children.length > MAX_DETECTIONS) list.removeChild(list.lastChild);
+            el.textContent = `${d.content}${pct}`;
+            el.style.color = '#fff';
         });
 
         function updateDisplay() {
