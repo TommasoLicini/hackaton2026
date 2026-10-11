@@ -23,7 +23,6 @@ Il progetto sfrutta il modello **Bridge** della UNO Q, dove la parte Linux (Pyth
 ### 1. Misura della corrente e soiling ratio
 Lo sketch misura la tensione ai capi di una resistenza di carico (`R_OHM`) e ricava la corrente con la legge di Ohm (`I = V / R`). Il valore viene mediato su più campioni (`N_SAMPLES`) e salvato in una variabile atomica (`lastCurrentMa`) perché letto da un contesto diverso (la callback RPC del Bridge). L'idea è confrontare un pannello pulito con uno sporco per stimare il *soiling ratio*. Controlli di sicurezza avvisano se la tensione è vicina al fondo scala o se la luce è troppo bassa.
 
-> Nota di sicurezza hardware: il pannello non va mai collegato direttamente al pin analogico, ma sempre tramite la resistenza di carico e il filtro RC (vedi schema nel commento dello sketch).
 
 ### 2. Rilevamento AI dei pannelli sporchi/danneggiati
 Il backend usa `VideoImageClassification` con un modello **Edge Impulse** distribuito manualmente (`model.yaml`). Ogni rilevamento (coppia `label: confidence`) viene inoltrato al frontend. Quando viene rilevato il label `damage`, parte un avviso Telegram.
